@@ -43,13 +43,28 @@ def collect_news(keyword: str, display: int = 10) -> list:
 
 
 if __name__ == "__main__":
-    # 데이터랩 테스트
+    os.makedirs("data/raw", exist_ok=True)
+
+    # 데이터랩 수집 + 저장
     print("네이버 데이터랩 수집 중...")
     data = collect_datalab(KEYWORDS)
-    print(data)
+    rows = []
+    for result in data["results"]:
+        keyword = result["title"]
+        for entry in result["data"]:
+            rows.append({"date": entry["period"], "keyword": keyword, "ratio": entry["ratio"]})
+    df = pd.DataFrame(rows).pivot(index="date", columns="keyword", values="ratio")
+    df.to_csv("data/raw/naver_trends.csv")
+    print(f"저장 완료: data/raw/naver_trends.csv ({len(df)}행)")
 
-    # 뉴스 테스트
+    # 뉴스 수집 + 저장
     print("\n네이버 뉴스 수집 중...")
-    news = collect_news("불닭")
-    for item in news[:3]:
-        print(item["title"], "|", item["pubDate"])
+    all_news = []
+    for kw in KEYWORDS:
+        items = collect_news(kw, display=10)
+        for item in items:
+            item["keyword"] = kw
+            all_news.append(item)
+    news_df = pd.DataFrame(all_news)
+    news_df.to_csv("data/raw/naver_news.csv", index=False)
+    print(f"저장 완료: data/raw/naver_news.csv ({len(news_df)}행)")
