@@ -51,7 +51,18 @@ def collect_news_year(keyword: str, year: int) -> pd.DataFrame:
 
         time.sleep(0.1)
 
-    return pd.DataFrame(all_items)
+    df = pd.DataFrame(all_items)
+    if df.empty:
+        return df
+
+    # pubDate 없는 행 제거 후 실제 발행 연도로 year 재설정
+    df = df[df["pubDate"].notna() & (df["pubDate"] != "")].copy()
+    if df.empty:
+        return df
+    df["pubDate"] = pd.to_datetime(df["pubDate"], format="mixed", utc=True)
+    df["year"] = df["pubDate"].dt.year
+    df = df[df["year"] == year].reset_index(drop=True)
+    return df
 
 
 if __name__ == "__main__":

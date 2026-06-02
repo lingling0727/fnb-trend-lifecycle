@@ -51,7 +51,18 @@ def collect_blog_year(keyword: str, year: int) -> pd.DataFrame:
 
         time.sleep(0.1)
 
-    return pd.DataFrame(all_items)
+    df = pd.DataFrame(all_items)
+    if df.empty:
+        return df
+
+    # postdate 없는 행 제거 후 실제 발행 연도로 year 재설정
+    df = df[df["postdate"].notna() & (df["postdate"] != "")].copy()
+    if df.empty:
+        return df
+    df["postdate"] = pd.to_datetime(df["postdate"], format="%Y%m%d", errors="coerce", utc=False)
+    df["year"] = df["postdate"].dt.year
+    df = df[df["year"] == year].reset_index(drop=True)
+    return df
 
 
 if __name__ == "__main__":
