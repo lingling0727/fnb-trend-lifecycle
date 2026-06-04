@@ -24,7 +24,7 @@ def collect_blog_year(keyword: str, year: int) -> pd.DataFrame:
     query = f"{keyword} {year}"
     all_items = []
     for start in range(1, MAX_ITEMS + 1, DISPLAY):
-        params = {"query": query, "display": DISPLAY, "start": start, "sort": "date"}
+        params = {"query": query, "display": DISPLAY, "start": start, "sort": "sim"}
         try:
             res = requests.get(URL, headers=headers, params=params, timeout=10)
             data = res.json()
