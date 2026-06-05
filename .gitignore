@@ -6,3 +6,5 @@ data/raw/
 
 UPDATES.md
 CONTEXT.md
+.DS_Store
+src/.DS_Store
