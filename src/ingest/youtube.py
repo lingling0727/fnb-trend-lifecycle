@@ -144,7 +144,7 @@ def collect_keyword(keyword):
             writer.writerows(rows)
         print(f"  → {len(rows)}행 저장: {out_path}")
 
-# ── 메인 수집 루프 ──────────────────────────────────────────────────
+# 메인 수집 루프
 print(f"수집 시작: {datetime.now()}")
 print(f"키워드 {len(keywords)}개")
 

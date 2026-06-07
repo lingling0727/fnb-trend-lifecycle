@@ -34,7 +34,7 @@ from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from bs4 import BeautifulSoup
 
-# ── 상수 ──────────────────────────────────────────────────────────────────────
+# 상수
 
 HEADERS = {
     "User-Agent": (
@@ -53,7 +53,7 @@ MAX_PER_PERIOD_OTHER = 1000  # 그 외 구간 (연별)
 DATE_PATTERN = re.compile(r"\d{4}\.\s*\d{1,2}\.\s*\d{1,2}")
 
 
-# ── URL 생성 ──────────────────────────────────────────────────────────────────
+# URL 생성
 
 def news_url(query: str, ds: str, de: str, start: int) -> str:
     """
@@ -83,7 +83,7 @@ def blog_url(query: str, ds: str, de: str, start: int) -> str:
     )
 
 
-# ── HTML 파싱 ─────────────────────────────────────────────────────────────────
+# HTML 파싱
 
 def parse_news_page(soup: BeautifulSoup) -> list[dict]:
     """
@@ -175,7 +175,7 @@ def parse_blog_page(soup: BeautifulSoup) -> list[dict]:
     return results
 
 
-# ── 기간별 수집 ───────────────────────────────────────────────────────────────
+# 기간별 수집
 
 def scrape_period(
     source: str,      # "news" 또는 "blog"
@@ -228,7 +228,7 @@ def scrape_period(
     return all_items
 
 
-# ── 기간 목록 생성 ────────────────────────────────────────────────────────────
+# 기간 목록 생성
 
 def build_periods(peak_year: int) -> list[tuple[str, str, int]]:
     """
@@ -275,7 +275,7 @@ def build_periods(peak_year: int) -> list[tuple[str, str, int]]:
     return periods
 
 
-# ── 키워드 수집 ───────────────────────────────────────────────────────────────
+# 키워드 수집
 
 def collect_keyword(
     source: str,
@@ -327,7 +327,7 @@ def collect_keyword(
     return combined
 
 
-# ── 메인 ──────────────────────────────────────────────────────────────────────
+# 메인
 
 if __name__ == "__main__":
     import argparse
