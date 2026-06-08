@@ -10,6 +10,8 @@ from pyspark.sql.functions import (
     year as spark_year, corr
 )
 import pyspark.sql.functions as F
+from pyspark.ml.stat import Correlation
+from pyspark.ml.feature import VectorAssembler
 
 spark = SparkSession.builder \
     .appName("FnbLifecycle") \
@@ -121,12 +123,28 @@ lifecycle_df.groupBy("label").agg(
 # --------------------------------------------------
 # 출력 3: 확산 빠를수록 소멸도 빠른가? (상관관계)
 # rise_days, fall_days 둘 다 있는 키워드만 자동 사용
+# Pearson은 말차(rise 3472일) 같은 극단 아웃라이어에 취약 →
+#   특정 점을 손으로 빼지 않고(체리피킹 방지) 순위기반 Spearman을 병기.
+#   Spearman은 모든 아웃라이어의 영향을 자동으로 완화함.
 # --------------------------------------------------
 print("\n[상관관계: rise_days vs fall_days]")
 print("(음수 상관 = 빠른 확산일수록 빠른 소멸)")
-lifecycle_df.agg(
-    spark_round(corr("rise_days", "fall_days"), 4).alias("corr_rise_fall")
-).show()
+print("Pearson=아웃라이어 취약 / Spearman=순위기반 강건")
+
+corr_src = lifecycle_df.select(
+    col("rise_days").cast("double").alias("rise_days"),
+    col("fall_days").cast("double").alias("fall_days")
+).dropna()
+
+corr_vec = VectorAssembler(
+    inputCols=["rise_days", "fall_days"], outputCol="v"
+).transform(corr_src)
+
+pear  = Correlation.corr(corr_vec, "v", "pearson").head()[0].toArray()[0][1]
+spear = Correlation.corr(corr_vec, "v", "spearman").head()[0].toArray()[0][1]
+print("  Pearson  : {:.4f}  (말차 아웃라이어에 끌려간 값)".format(pear))
+print("  Spearman : {:.4f}  (순위기반 = 실제 관계에 가까움)".format(spear))
+print("  (유효 표본 n = {})".format(corr_src.count()))
 
 # --------------------------------------------------
 # 출력 4: 숏폼 이전/이후 피크 도달 속도 비교
