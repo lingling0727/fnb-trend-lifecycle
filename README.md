@@ -66,7 +66,8 @@
 | 데이터 수집 | Python (네이버 DataLab API, 네이버 검색 API, YouTube Data API, BeautifulSoup) |
 | 저장 | HDFS (HDP 3.0.1 Sandbox) |
 | 전처리·분석 | Apache Spark 2.3 (DataFrame / Spark SQL) on YARN |
-| 머신러닝 | Spark MLlib (RandomForest, LogisticRegression) |
+| 테이블 관리·요약 쿼리 | Hive (메타스토어 연동 + HiveQL 집계 쿼리 — `summary.hql`) |
+| 머신러닝 | Spark MLlib (RandomForest, LogisticRegression, CrossValidator) |
 | 감성분석 | KNU 한국어 감성사전 + SO-CAL 공식 |
 | 시각화 | Matplotlib / Plotly |
 
@@ -84,14 +85,25 @@
 | 합계 | | 약 38.4만 | 110.4MB | |
 
 
-## 6. 파이프라인
+## 6. 파이프라인 자동화
 
-실행 환경: GCP VM → SSH 터널 → Docker HDP Sandbox (Spark 2.3 / YARN)
+수집부터 결과 산출까지 `run_pipeline.sh` 한 번으로 실행된다.
+
+```bash
+bash run_pipeline.sh
+```
+
+API 키 유무에 따라 자동 분기:
+- `.env`에 API 키 있음 → 실제 데이터 수집 후 전체 파이프라인 실행
+- API 키 없음 → `data/sample/` 샘플 데이터로 자동 대체
+
+실행 환경: 로컬에서 실행, GCP VM → SSH 터널 → Docker HDP Sandbox (Spark 2.3 / YARN)에 원격 제어
 
 ```
-[수집]  네이버 DataLab(시계열) / 뉴스·블로그(검색 API) / 유튜브 댓글(Data API)
+[수집]  API 키 있음: 네이버 DataLab / 뉴스 / 블로그 / 유튜브 실제 수집
+        API 키 없음: data/sample/ 샘플 데이터 사용 (소스별 300행)
                               │
-[저장]  HDFS 적재 (CSV/JSON)
+[저장]  HDFS 적재 (scp → hdfs dfs -put)
                               │
 [전처리] Spark — 결측 처리, 타입 변환, year 파생, 텍스트 정제
                               │
@@ -104,7 +116,9 @@
 [분석]  Q1 확산속도 / Q2 부정여론 / Q3 숏폼 / Q4 노출량
         + 생애주기(rise/fall) + 피처 마스터테이블 + MLlib 피처중요도
                               │
-[시각화] 생애주기 곡선 / 피처 중요도 차트
+[HiveQL] 그룹별 피처 평균 / 숏폼 전후 교차표 / 키워드 요약 (summary.hql)
+                              │
+결과: logs/summary_result.txt
 ```
 
 
@@ -113,9 +127,12 @@
 ```
 fnb-trend-lifecycle/
 ├── README.md
+├── run_pipeline.sh            # 수집~산출 전체 파이프라인 자동화 (bash)
 ├── keywords.json              # 키워드 38개 + 유행시작연도 + 숏폼 플래그
 ├── SentiWord_Dict.txt         # KNU 한국어 감성사전
-├── data/                      # 로컬 수집 원본
+├── data/
+│   ├── raw/                   # 로컬 수집 원본 (gitignore)
+│   └── sample/                # 소스별 샘플 300행 (datalab/news/blog/youtube)
 ├── src/
 │   ├── ingest/                # 수집 — naver_datalab / naver_news / naver_blog / youtube
 │   ├── pipeline/
@@ -128,7 +145,8 @@ fnb-trend-lifecycle/
 │       ├── features.py        # 피처 마스터테이블(fnb_features) 생성
 │       └── ml.py              # Q4 + 통계검정 + MLlib 피처중요도
 └── docs/
-    └── report.pdf             # 최종 보고서
+    ├── report.pdf             # 최종 보고서
+    └── references/            # 참고 자료
 ```
 
 
