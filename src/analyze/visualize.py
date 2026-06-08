@@ -169,7 +169,7 @@ def fig_scatter():
     patch_s = mpatches.Patch(color=C_SETTLE, label=f"정착 (n={n_s})")
     patch_f = mpatches.Patch(color=C_FADE,   label=f"소멸 (n={n_f})")
 
-    style_ax(ax, "확산 속도 vs 지속성\n(급발진할수록 소멸, Cohen's d = -1.14)")
+    style_ax(ax, "확산 속도 vs 지속성\n(급발진할수록 소멸, Cohen's d = -1.54)")
     ax.set_xlabel("확산속도 (spread_speed: 높을수록 급발진)", color=C_TEXT, fontsize=10)
     ax.set_ylabel("피크 후 평균 검색량 (post_peak_avg)", color=C_TEXT, fontsize=10)
     ax.legend(handles=[patch_s, patch_f], loc="upper right", fontsize=9)
@@ -201,9 +201,9 @@ def fig_feature_compare():
     fig, ax = plt.subplots(figsize=(9, 5))
     fig.patch.set_facecolor(C_BG)
 
-    bars_s = ax.bar(x - w/2, settle, w, color=C_SETTLE, label="정착 (n=16)",
+    bars_s = ax.bar(x - w/2, settle, w, color=C_SETTLE, label="정착 (n=22)",
                     alpha=0.9, zorder=3)
-    bars_f = ax.bar(x + w/2, fade,   w, color=C_FADE,   label="소멸 (n=22)",
+    bars_f = ax.bar(x + w/2, fade,   w, color=C_FADE,   label="소멸 (n=16)",
                     alpha=0.9, zorder=3)
 
     # 값 표시
@@ -216,10 +216,12 @@ def fig_feature_compare():
         ax.text(bar.get_x() + bar.get_width()/2, h + 0.3,
                 f"{h:.2f}", ha="center", va="bottom", fontsize=8, color="#8B4444")
 
-    # 유의 표시
+    # 유의 표시 (|t|>2.03 ≈ p<0.05): spread_speed t=-4.47, volatility t=4.75 유의 /
+    #   surge_count t=1.79, neg_ratio t=-2.00 유의하지 않음
+    sig_map = {"spread_speed": "*", "volatility": "*",
+               "surge_count": "n.s.", "neg_ratio": "n.s."}
     for i, feat in enumerate(features):
-        sig = "*" if feat != "neg_ratio" else "n.s."
-        ax.text(i, max(settle[i], fade[i]) + 1.5, sig,
+        ax.text(i, max(settle[i], fade[i]) + 1.5, sig_map[feat],
                 ha="center", fontsize=11, color=C_DARK, fontweight="bold")
 
     ax.set_xticks(x)
@@ -238,8 +240,8 @@ def fig_feature_compare():
 # ==================================================
 def fig_importance():
     # 누수 없는 사전 지표만 (준-누수 volatility/surge_count/total_buzz/neg_ratio 제외)
-    labels_kr = ["확산속도", "사전 인지도", "숏폼 시대"]
-    scores    = [0.4887, 0.4717, 0.0396]
+    labels_kr = ["사전 인지도", "확산속도", "숏폼 시대"]
+    scores    = [0.6370, 0.3385, 0.0244]
     colors    = [C_DARK, C_DARK, C_SETTLE]
 
     idx = np.argsort(scores)
@@ -257,7 +259,7 @@ def fig_importance():
         ax.text(score + 0.005, bar.get_y() + bar.get_height()/2,
                 f"{score:.4f}", va="center", fontsize=9, color=C_TEXT)
 
-    style_ax(ax, "MLlib RandomForest 피처 중요도\n(CV 0.710 vs 기준선 0.579, n=38 해석용)")
+    style_ax(ax, "MLlib RandomForest 피처 중요도\n(CV 0.867 vs 기준선 0.579, n=38 해석용)")
     ax.set_xlabel("중요도 점수", color=C_TEXT, fontsize=10)
     ax.grid(axis="x", color=C_GRID, linewidth=0.8, linestyle="--")
     ax.grid(axis="y", visible=False)
@@ -272,8 +274,8 @@ def fig_importance():
 # ==================================================
 def fig_shortform():
     eras   = ["숏폼 이전\n(~2020)", "숏폼 이후\n(2021~)"]
-    settle = [4,  8]
-    fade   = [13, 7]
+    settle = [7, 9]
+    fade   = [8, 6]
     total  = [s + f for s, f in zip(settle, fade)]
     rate   = [s / t * 100 for s, t in zip(settle, total)]
 
@@ -323,6 +325,64 @@ def fig_shortform():
     print("저장: 05_shortform.png")
 
 # ==================================================
+# 그림 6: 피크 기준 전/후 분할 (분석 방법론 시각화)
+#   왜 피크 기준으로 데이터를 나눴는가 = 누수 방지 핵심 설계
+# ==================================================
+def fig_peak_split():
+    feats = load_features()
+    if feats is None:
+        print("경고: fnb_features_export.csv 없음 — 06_peak_split.png 건너뜀")
+        return
+
+    # 정착 대표(불닭볶음면) / 소멸 대표(탕후루)
+    targets = [
+        ("불닭볶음면", C_SETTLE, "피크 후 유지 → 정착"),
+        ("탕후루",     C_FADE,   "피크 후 급락 → 소멸"),
+    ]
+
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+    fig.patch.set_facecolor(C_BG)
+
+    for ax, (kw, after_color, desc) in zip(axes, targets):
+        df = load_keyword(kw)
+        if df is None:
+            continue
+        x = df["ym"].dt.to_timestamp()
+        y = df["ratio"].values
+
+        # 피크 날짜는 분석 피처테이블 값을 그대로 사용 (시각화-분석 일치)
+        row = feats[feats["keyword"] == kw]
+        peak = pd.to_datetime(row["peak_date"].values[0])
+
+        ax.plot(x, y, color=C_DARK, linewidth=2.0, zorder=4)
+
+        # 피크 전(확산) / 후(정착·소멸) 음영
+        x0, x1 = x.min(), x.max()
+        ax.axvspan(x0, peak,  color=C_LIGHT,    alpha=0.45, zorder=1)
+        ax.axvspan(peak, x1,  color=after_color, alpha=0.30, zorder=1)
+        ax.axvline(peak, color=C_DARK, linestyle="--", linewidth=1.4, zorder=5)
+
+        # 영역 레이블
+        ymax = float(y.max())
+        ax.text(x0 + (peak - x0) / 2, ymax * 0.95, "피크 이전\n(확산)",
+                ha="center", va="top", fontsize=9, color=C_DARK, fontweight="bold")
+        ax.text(peak + (x1 - peak) / 2, ymax * 0.95, "피크 이후",
+                ha="center", va="top", fontsize=9, color=C_TEXT, fontweight="bold")
+        ax.annotate("피크", (peak, ymax), textcoords="offset points",
+                    xytext=(5, -2), fontsize=8, color=C_DARK)
+
+        style_ax(ax, f"{kw} — {desc}")
+        ax.set_ylabel("검색량 지수 (DataLab)", color=C_TEXT, fontsize=9)
+
+    fig.suptitle("피크를 기준으로 '확산'과 '정착/소멸'을 분리해 분석",
+                 fontsize=13, fontweight="bold", color=C_DARK, y=1.02)
+
+    plt.tight_layout()
+    plt.savefig(f"{OUT_DIR}/06_peak_split.png", dpi=150, bbox_inches="tight")
+    plt.close()
+    print("저장: 06_peak_split.png")
+
+# ==================================================
 # 실행
 # ==================================================
 if __name__ == "__main__":
@@ -332,4 +392,5 @@ if __name__ == "__main__":
     fig_feature_compare()
     fig_importance()
     fig_shortform()
+    fig_peak_split()
     print("\n시각화 완료!")

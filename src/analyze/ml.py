@@ -150,11 +150,14 @@ cv = CrossValidator(
 cv_model = cv.fit(data)
 cv_acc = cv_model.avgMetrics[0]
 
-base_rate = data.filter(col("label_num") == 0).count() / float(n_total)  # 다수클래스(소멸) 비율
+# 기준선 = 다수클래스 비율 (전부 다수클래스로 찍었을 때 정확도)
+cnt0 = data.filter(col("label_num") == 0).count()
+cnt1 = n_total - cnt0
+base_rate = max(cnt0, cnt1) / float(n_total)
 print("\n[정확도]")
-print("  학습 정확도(과적합):   {:.3f}".format(train_acc))
-print("  5-fold CV 정확도:      {:.3f}".format(cv_acc))
-print("  기준선(전부 소멸 찍기): {:.3f}".format(base_rate))
+print("  학습 정확도(과적합):      {:.3f}".format(train_acc))
+print("  5-fold CV 정확도:         {:.3f}".format(cv_acc))
+print("  기준선(다수클래스 찍기):  {:.3f}".format(base_rate))
 
 # --- LogisticRegression 표준화 계수 (방향성) ---
 scaler = StandardScaler(inputCol="features", outputCol="sfeatures",

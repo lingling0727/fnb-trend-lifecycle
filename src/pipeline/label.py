@@ -4,7 +4,7 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
-    col, avg, count, lit, months_between, row_number, greatest,
+    col, avg, count, lit, months_between, row_number, greatest, datediff,
     min as spark_min, max as spark_max, round as spark_round
 )
 from pyspark.sql.window import Window
@@ -22,6 +22,8 @@ spark.sparkContext.setLogLevel("WARN")
 RETENTION_THRESHOLD = 0.5   # post_peak_avg / pre_peak_avg >= 0.5
 ABS_THRESHOLD       = 10.0  # post_peak_avg >= 10 (DataLab 100점 스케일 기준)
 PRE_PEAK_FLOOR      = 1.0   # 갑작스럽게 등장한 키워드의 pre_peak=0 보정
+SMOOTH_DAYS         = 15    # 피크 탐지용 이동평균 반경(±15일 = 31일 중심)
+PEAK_FRAC           = 0.8   # 첫 주요 피크 기준: 평활 최댓값의 80% 첫 도달 시점
 MIN_POST_MONTHS     = 12.0  # 피크 이후 최소 12개월 데이터가 있어야 라벨 신뢰
 MIN_PRE_MONTHS      = 1.0   # 피크 이전 최소 1개월 데이터가 있어야 라벨 신뢰
 
@@ -36,9 +38,25 @@ bounds_df = datalab.groupBy("keyword").agg(
 )
 
 # 키워드별 피크 날짜 + ratio (Spark 2.x 호환 Window 방식)
-print("\n=== [2] 키워드별 피크 계산 ===")
-w = Window.partitionBy("keyword").orderBy(col("ratio").desc(), col("date").desc())
-peak_df = datalab.withColumn("rn", row_number().over(w)) \
+# 피크 정의 = '첫 주요 피크'(상승의 끝):
+#   1) 단발 이상치(DataLab 하루짜리 글리치) 방어 위해 31일 중심 이동평균으로 평활
+#   2) 평활값이 키워드별 최댓값의 PEAK_FRAC(80%)에 처음 도달한 날을 피크로 지정
+#   - 일별 argmax는 하루 스파이크에 속음 (예: 탕후루 2019 글리치 vs 2023 바이럴)
+#   - 글로벌 최댓값은 다파동 정착 제품(불닭)이 최신 파동을 피크로 잡아 post 구간을 왜곡
+#   - 첫 주요 피크는 '상승→피크→정착/소멸' 생애주기 정의에 부합
+print("\n=== [2] 키워드별 피크 계산 (31일 이동평균 + 첫 주요 피크) ===")
+# 날짜를 일수로 변환 (rangeBetween용)
+dl = datalab.withColumn("day_num", datediff(col("date"), lit("2016-01-01")).cast("long"))
+# ±SMOOTH_DAYS(31일 중심) 이동평균
+w_roll = Window.partitionBy("keyword").orderBy("day_num").rangeBetween(-SMOOTH_DAYS, SMOOTH_DAYS)
+dl = dl.withColumn("ratio_smooth", avg("ratio").over(w_roll))
+# 키워드별 평활 최댓값
+smax_df = dl.groupBy("keyword").agg(spark_max("ratio_smooth").alias("smax"))
+# 평활값이 최댓값의 80% 이상이 되는 '첫' 날 = 첫 주요 피크
+w = Window.partitionBy("keyword").orderBy(col("date").asc())
+peak_df = dl.join(smax_df, "keyword") \
+    .filter(col("ratio_smooth") >= col("smax") * lit(PEAK_FRAC)) \
+    .withColumn("rn", row_number().over(w)) \
     .filter(col("rn") == 1) \
     .select(
         col("keyword"),
