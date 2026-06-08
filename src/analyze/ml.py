@@ -98,18 +98,18 @@ print("\n(* = |t|>2.03, df≈36 기준 통계적으로 유의 추정)")
 
 # ==================================================
 # MLlib: 정착/소멸 분류 피처 중요도
-# 누수(leakage) 방지: 라벨을 직접 정의하는 post_peak_avg / retention / decay_slope 제외
-#   → '피크 전 + 전 기간 특성'만으로 정착을 설명
+# 누수 방지 원칙:
+#   - 완전 누수 제외: post_peak_avg, retention_ratio, decay_slope (라벨 직접 정의)
+#   - 준-누수 제외: volatility, surge_count, total_buzz, neg_ratio (전 기간 집계 → 사후 정보 포함)
+#   - 사용 피처: 피크 이전 데이터만으로 산출되는 순수 사전 지표만
 # ==================================================
 print("\n" + "="*60)
 print("MLlib 피처 중요도 (정착/소멸 분류)")
+print("누수 없는 사전 지표만 사용: spread_speed, pre_peak_avg, shortform_era")
 print("주의: n=38 → 예측 모델이 아니라 '변수 중요도 해석'용. 과적합 전제.")
 print("="*60)
 
-ml_cols = [
-    "spread_speed", "pre_peak_avg", "volatility",
-    "surge_count", "total_buzz", "neg_ratio", "shortform_era"
-]
+ml_cols = ["spread_speed", "pre_peak_avg", "shortform_era"]
 
 # spread_speed NULL → 중앙값 대치 (Spark 2.3 VectorAssembler는 NULL 불가)
 imputer = Imputer(strategy="median",
@@ -117,8 +117,7 @@ imputer = Imputer(strategy="median",
                   outputCols=["spread_speed_i"])
 fm = imputer.fit(feat).transform(feat)
 
-assemble_cols = ["spread_speed_i", "pre_peak_avg", "volatility",
-                 "surge_count", "total_buzz", "neg_ratio", "shortform_era"]
+assemble_cols = ["spread_speed_i", "pre_peak_avg", "shortform_era"]
 for c in assemble_cols:
     fm = fm.withColumn(c, col(c).cast("double"))
 
@@ -131,7 +130,8 @@ rf = RandomForestClassifier(labelCol="label_num", featuresCol="features",
 rf_model = rf.fit(data)
 
 print("\n[RandomForest featureImportances]")
-imp = sorted(zip(ml_cols, rf_model.featureImportances.toArray()),
+imp = sorted(zip(["spread_speed", "pre_peak_avg", "shortform_era"],
+                 rf_model.featureImportances.toArray()),
              key=lambda x: -x[1])
 for name, score in imp:
     bar = "#" * int(round(score * 50))
@@ -164,7 +164,8 @@ lr = LogisticRegression(labelCol="label_num", featuresCol="sfeatures", maxIter=2
 lr_model = lr.fit(sdata)
 
 print("\n[LogisticRegression 표준화 계수 (+면 정착, -면 소멸 방향)]")
-coefs = sorted(zip(ml_cols, lr_model.coefficients.toArray()),
+coefs = sorted(zip(["spread_speed", "pre_peak_avg", "shortform_era"],
+                   lr_model.coefficients.toArray()),
                key=lambda x: -abs(x[1]))
 for name, c in coefs:
     print("  {:<14}{:>+8.4f}".format(name, c))
