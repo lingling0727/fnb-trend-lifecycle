@@ -32,7 +32,7 @@
 - 문제 — "트렌드 분석"을 일반화하지 않고 "생애주기 결말을 가르는 변수"로 재정의했으며, 정착/소멸 라벨을 사전 정의 임계값으로 자동 부여했다.
 - 분석 — 아래와 같은 설계로 단순 상관 나열을 넘어섰다.
   - DataLab 키워드별 독립 정규화의 함정을 인지하고, 정규화에 불변인 키워드-내부 비율 지표만 사용 (절대 검색량 비교 회피)
-  - 데이터 누수 방지: 라벨을 정의하는 사후 지표를 ML 피처에서 제외
+  - 데이터 누수 방지: 라벨을 직접 정의하는 사후 지표(post_peak_avg, retention_ratio 등) 및 전 기간 집계로 사후 정보가 섞이는 지표(volatility, surge_count 등)를 ML 피처에서 모두 제외
   - 수렴타당도 검증: 서로 다른 두 지표(spread_speed ↔ rise_days)가 같은 결론을 가리키는지 교차 확인
   - 아웃라이어 강건성: Pearson 대신 순위기반 Spearman 병기 (특정 데이터 임의 제거 회피)
   - 최신성 교란 통제: 피크 후 12개월 데이터 확보 여부(reliable 플래그)로 재집계
@@ -47,14 +47,14 @@
 - Q3 숏폼 전후 — 숏폼 이전 정착률 24% vs 이후 53% (신뢰 라벨 기준). recency 교란(최신 키워드는 아직 소멸할 시간이 없음)을 통제해도 차이는 유지되나 인과관계는 불명확 → 판단 보류
 - Q4 노출량 — 정착 6,470 vs 소멸 7,690 (유의하지 않음) → 많이 회자된다고 살아남지 않음
 - rise vs fall — Spearman = -0.02 (n=28) → 확산 속도와 소멸 속도는 독립 ("빨리 뜨면 빨리 죽는다" 통념 기각)
-- MLlib 피처중요도 — volatility 0.33 / pre_peak_avg 0.25 / spread_speed 0.22 (CV 0.782 vs 기준선 0.579)
+- MLlib 피처중요도 — spread_speed 0.49 / pre_peak_avg 0.47 / shortform_era 0.04 (CV 0.710 vs 기준선 0.579, 누수 없는 사전 지표만)
 
 종합: 트렌드의 생애주기를 가르는 것은 부정여론이나 노출량이 아니라 유행이 형성되는 속도(점진 vs 급발진)였다.
 
 ### 분석의 한계
 
 - 표본 n=38 — MLlib는 예측 모델이 아니라 변수 중요도 해석용이며 과적합 전제
-- volatility·surge_count는 전 기간 집계라 피크 이후 정보가 일부 섞임(준-누수). 누수 없는 순수 사전 지표는 pre_peak_avg·spread_speed
+- ML 피처는 피크 이전 데이터만으로 산출되는 사전 지표(spread_speed, pre_peak_avg, shortform_era)만 사용. volatility·surge_count·total_buzz·neg_ratio는 전 기간 집계(준-누수)로 제외
 - 라벨 임계값(retention≥0.5, post≥10)은 자의적 — 컷오프에 따라 일부 경계 키워드 라벨이 바뀔 수 있음
 - 노출량은 키워드 나이에 교란 — 오래된 트렌드일수록 누적 문서가 많음
 
@@ -69,7 +69,7 @@
 | 테이블 관리·요약 쿼리 | Hive (메타스토어 연동 + HiveQL 집계 쿼리 — `summary.hql`) |
 | 머신러닝 | Spark MLlib (RandomForest, LogisticRegression, CrossValidator) |
 | 감성분석 | KNU 한국어 감성사전 + SO-CAL 공식 |
-| 시각화 | Matplotlib / Plotly |
+| 시각화 | Matplotlib |
 
 
 ## 5. 데이터 소스
@@ -143,7 +143,10 @@ fnb-trend-lifecycle/
 │       ├── analyze.py         # Q1·Q2·Q3 (확산속도/부정여론/숏폼)
 │       ├── lifecycle.py       # 생애주기 rise/fall + Spearman 상관
 │       ├── features.py        # 피처 마스터테이블(fnb_features) 생성
-│       └── ml.py              # Q4 + 통계검정 + MLlib 피처중요도
+│       ├── ml.py              # Q4 + 통계검정 + MLlib 피처중요도
+│       ├── summary.hql        # HiveQL 그룹 요약 쿼리
+│       ├── export_results.py  # fnb_features → HDFS CSV 추출
+│       └── visualize.py       # 분석 결과 시각화 (로컬 실행)
 └── docs/
     ├── report.pdf             # 최종 보고서
     └── references/            # 참고 자료
