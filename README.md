@@ -142,7 +142,7 @@ API 키 유무에 따라 자동 분기:
 fnb-trend-lifecycle/
 ├── README.md
 ├── run_pipeline.sh            # 수집~산출 전체 파이프라인 자동화 (bash)
-├── keywords.json              # 키워드 38개 + 유행시작연도 + 숏폼 플래그
+├── keywords.json              # 분석 대상 키워드 38개 (숏폼 구분은 peak_date에서 파생)
 ├── SentiWord_Dict.txt         # KNU 한국어 감성사전
 ├── data/
 │   ├── raw/                   # 로컬 수집 원본 (gitignore)
